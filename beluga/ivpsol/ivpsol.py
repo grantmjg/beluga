@@ -1,12 +1,14 @@
 import numpy as np
-from scipy.optimize import minimize
-import scipy.integrate
+from scipy.integrate import solve_ivp, simps
 import scipy.interpolate
-import time
 import copy
-from beluga.utils import keyboard
-from scipy.integrate import simps
 
+from beluga.ivpsol import RKMK, Flow
+from beluga.liepack.domain.hspaces import HLie
+from beluga.liepack.domain.liegroups import RN
+from beluga.liepack.domain.liealgebras import rn
+from beluga.liepack import exp
+from beluga.liepack.field import VectorField
 
 class Algorithm(object):
     """
@@ -34,25 +36,37 @@ class Propagator(Algorithm):
         :param kwargs: Additional parameters accepted by the solver.
         :return: Propagator object.
 
-        +------------------------+-----------------+-----------------+
-        | Valid kwargs           | Default Value   | Valid Values    |
-        +========================+=================+=================+
-        | abstol                 | 1e-6            |  > 0            |
-        +------------------------+-----------------+-----------------+
-        | maxstep                | 0.1             |  > 0            |
-        +------------------------+-----------------+-----------------+
-        | reltol                 | 1e-6            |  > 0            |
-        +------------------------+-----------------+-----------------+
+        +------------------------+-----------------+--------------------+
+        | Valid kwargs           | Default Value   | Valid Values       |
+        +========================+=================+====================+
+        | abstol                 | 1e-6            |  > 0               |
+        +------------------------+-----------------+--------------------+
+        | maxstep                | 0.1             |  > 0               |
+        +------------------------+-----------------+--------------------+
+        | reltol                 | 1e-6            |  > 0               |
+        +------------------------+-----------------+--------------------+
+        | program                | 'scipy'         |  {'scipy', 'lie'}  |
+        +------------------------+-----------------+--------------------+
+        | method                 | 'RKMK'          |  {'RKMK'}          |
+        +------------------------+-----------------+--------------------+
+        | stepper                | 'RK45'          |  see ivp methods   |
+        +------------------------+-----------------+--------------------+
+        | variable_step          | True            |  bool              |
+        +------------------------+-----------------+--------------------+
         """
 
         obj = super().__new__(cls, *args, **kwargs)
         obj.abstol = kwargs.get('abstol', 1e-6)
         obj.maxstep = kwargs.get('maxstep', 0.1)
         obj.reltol = kwargs.get('reltol', 1e-6)
+        obj.program = kwargs.get('program', 'scipy').lower()
+        obj.method = kwargs.get('method', 'RKMK').upper()
+        obj.stepper = kwargs.get('stepper', 'RK45').upper()
+        obj.variable_step = kwargs.get('variable_step', True)
         return obj
 
     def __call__(self, eom_func, quad_func, tspan, y0, q0, *args, **kwargs):
-        """
+        r"""
         Propagates the differential equations over a defined time interval.
 
         :param eom_func: Function representing the equations of motion.
@@ -62,12 +76,40 @@ class Propagator(Algorithm):
         :param q0: Initial quad position.
         :param args: Additional arguments required by EOM files.
         :param kwargs: Unused.
-        :return: A full reconstructed trajectory, :math:`\\gamma`.
+        :return: A full reconstructed trajectory, :math:`\gamma`.
         """
-        int_sol = scipy.integrate.solve_ivp(lambda t, y: eom_func(t, y, *args), [tspan[0], tspan[-1]], y0,
-                                            rtol=self.reltol, atol=self.abstol, max_step=self.maxstep)
+        y0 = np.array(y0, dtype=np.float64)
 
-        gamma = Trajectory(int_sol.t, int_sol.y.T)
+        if self.program == 'scipy':
+            int_sol = solve_ivp(lambda t, y: eom_func(t, y, *args), [tspan[0], tspan[-1]], y0,
+                                rtol=self.reltol, atol=self.abstol, max_step=self.maxstep)
+            gamma = Trajectory(int_sol.t, int_sol.y.T)
+
+        elif self.program == 'lie':
+            dim = y0.shape[0]
+            g = rn(dim)
+            g.set_vector(y0)
+            y = HLie(RN(dim), exp(g).data)
+            vf = VectorField(y)
+            vf.set_equationtype('general')
+
+            def M2g(t, y):
+                vec = y.data[:-1,-1]
+                out = eom_func(t, vec, *args)
+                g = rn(dim)
+                g.set_vector(out)
+                return g
+
+            vf.set_M2g(M2g)
+            if self.method == 'RKMK':
+                ts = RKMK()
+            else:
+                raise NotImplementedError
+
+            ts.setmethod(self.stepper)
+            f = Flow(ts, vf, variablestep=self.variable_step)
+            ti, yi = f(y, tspan[0], tspan[-1], self.maxstep)
+            gamma = Trajectory(ti, np.vstack([_.data[:-1,-1] for _ in yi])) # Hardcoded assuming RN
 
         if quad_func is not None:
             gamma = reconstruct(quad_func, gamma, *args)
@@ -76,15 +118,15 @@ class Propagator(Algorithm):
 
 
 class Trajectory(object):
-    """
+    r"""
     Class containing information for a trajectory.
 
     .. math::
-        \\gamma(t) : I \\subset \\mathbb{R} \\rightarrow B
+        \gamma(t) : I \subset \mathbb{R} \rightarrow B
     """
 
     def __new__(cls, *args, **kwargs):
-        """
+        r"""
         Creates a new Trajectory object.
 
         :param args: :math:`(t, y, q, u)`
@@ -121,11 +163,11 @@ class Trajectory(object):
         self.set_interpolate_function(self.interpolation_type)
 
     def __call__(self, t):
-        """
+        r"""
         Mapping function for a trajectory.
 
-        :param t: Time as :math:`t \\in \\mathbb{R}`
-        :return: Returns position values :math:`(y, q, u) \\in B`
+        :param t: Time as :math:`t \in \mathbb{R}`
+        :return: Returns position values :math:`(y, q, u) \in B`
         """
 
         t = np.array(t, dtype=np.float64)
@@ -148,6 +190,9 @@ class Trajectory(object):
                 y_val = np.array([f(t)])
             else:
                 y_val = f(t)
+
+            y_val = y_val.T
+
         else:
             f = [self.interpolate(self.t, self.y.T[ii]) for ii in range(dim)]
             y_val = np.array([f[ii](t) for ii in range(dim)]).T
@@ -193,19 +238,19 @@ class Trajectory(object):
 
 
 def reconstruct(quadfun, gamma, *args):
-    """
-    Completely reconstructs a trajectory for all time in :math:`\\gamma`.
+    r"""
+    Completely reconstructs a trajectory for all time in :math:`\gamma`.
 
     .. math::
-        \\begin{aligned}
-            \\text{reconstruct} : \\gamma \\in B/Q &\\rightarrow \\gamma \\in B \\\\
-            (g, \\gamma) &\\mapsto \\int_{t_0}^{t} g \\circ \\gamma dt \\; \\forall \\; t
-        \\end{aligned}
+        \begin{aligned}
+            \text{reconstruct} : \gamma \in B/Q &\rightarrow \gamma \in B \\
+            (g, \gamma) &\mapsto \int_{t_0}^{t} g \circ \gamma dt \; \forall \; t
+        \end{aligned}
 
     :param quadfun: Equations of motion on the symmetry space.
     :param gamma: Trajectory in quotient space :math:`B/Q`.
     :param args: Additional arguments needed by quadfun.
-    :return: :math:`\\gamma` - Reconstructed trajectory in total space :math:`B`.
+    :return: :math:`\gamma` - Reconstructed trajectory in total space :math:`B`.
     """
 
     gamma = copy.copy(gamma)
@@ -226,14 +271,14 @@ def reconstruct(quadfun, gamma, *args):
 
 
 def integrate_quads(quadfun, tspan, gamma, *args):
-    """
+    r"""
     Integrates quadratures over a trajectory base space. Only returns the terminal point.
 
     .. math::
-        \\begin{aligned}
-            \\text{integrate_quads} : \\gamma \\in B/Q &\\rightarrow q_f \\in B \\\\
-            (g, \\gamma) &\\mapsto \\int_{t_0}^{t_f} g \\circ \\gamma dt
-        \\end{aligned}
+        \begin{aligned}
+            \text{integrate_quads} : \gamma \in B/Q &\rightarrow q_f \in B \\
+            (g, \gamma) &\mapsto \int_{t_0}^{t_f} g \circ \gamma dt
+        \end{aligned}
 
     :param quadfun: Equations of motion on the symmetry space.
     :param tspan: Time interval to integrate over.

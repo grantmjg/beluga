@@ -1,8 +1,18 @@
+# Include the requirements
+include *.txt
+
 # Include the README
 include *.rst
 
 # Include the license file
 include LICENSE
+
+# Include the examples
+recursive-include examples *.py
+
+# Include the documentation
+recursive-include docs *
+prune docs/build
 
 # Include template files
 include beluga/bvpsol/templates/*
@@ -10,3 +20,6 @@ include beluga/optimlib/templates/brysonho/*
 include beluga/optimlib/templates/brysonho/qcpi/*
 include beluga/optimlib/templates/icrm/*
 include beluga/optimlib/templates/icrm/qcpi/*
+
+# Include the ivp solver methods
+include beluga/ivpsol/methods/*

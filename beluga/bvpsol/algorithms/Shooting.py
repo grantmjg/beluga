@@ -1,47 +1,45 @@
+import copy
+import itertools as it
+import logging
 import numpy as np
 
-from beluga.utils import timeout, keyboard
 from beluga.bvpsol.algorithms.BaseAlgorithm import BaseAlgorithm
 from beluga.ivpsol import Propagator
 from multiprocessing_on_dill import pool
-import copy
-import numba
-
-import logging
-import itertools as it
 
 
 class Shooting(BaseAlgorithm):
-    """
+    r"""
     Shooting algorithm for solving boundary value problems.
 
     Given a system of ordinary differential equations :eq:`ordinarydifferentialequation`, define the sensitivities as
 
     .. math::
-        A(t) = \\left[\\frac{\\partial \\mathbf{f}}{\\partial \\mathbf{x}}, \\frac{\\partial \\mathbf{f}}{\\partial \\mathbf{p}}\\right]
+        A(t) = \left[\frac{\partial \mathbf{f}}{\partial \mathbf{x}}, \frac{\partial \mathbf{f}}{\partial \mathbf{p}}\right]
 
     Then, the state-transition matrix is defined as the following set of first-order differential equations
 
     .. math::
-        \\begin{aligned}
-            \\Delta_0 &= \\left[Id_M, \\mathbf{0}\\right] \\\\
-            \\dot{\\Delta} &= A(t)\\Delta
-        \\end{aligned}
+        \begin{aligned}
+            \Delta_0 &= \left[Id_M, \mathbf{0}\right] \\
+            \dot{\Delta} &= A(t)\Delta
+        \end{aligned}
 
     Sensitivities of the boundary conditions are
 
     .. math::
-        \\begin{aligned}
-            M &= \\frac{\\partial \mathbf{\\Phi}}{\\partial \\mathbf{x}_0} \\\\
-            P &= \\frac{\\partial \mathbf{\\Phi}}{\\partial \\mathbf{p}} \\\\
-            Q_0 &= \\frac{\\partial \mathbf{\\Phi}}{\\partial \\mathbf{q}_0} \\\\
-            Q_f &= \\frac{\\partial \mathbf{\\Phi}}{\\partial \\mathbf{q}_f}
-        \\end{aligned}
+        \begin{aligned}
+            M &= \frac{\partial \mathbf{\Phi}}{\partial \mathbf{x}_0} \\
+            P &= \frac{\partial \mathbf{\Phi}}{\partial \mathbf{p}} \\
+            Q_0 &= \frac{\partial \mathbf{\Phi}}{\partial \mathbf{q}_0} \\
+            Q_f &= \frac{\partial \mathbf{\Phi}}{\partial \mathbf{q}_f}
+        \end{aligned}
 
     The Jacobian matrix is then the concatenation of these sensitivities
 
     .. math::
-        J = \\left[M, P, Q_0+Q_f \\right]
+        J = \left[M, P, Q_0+Q_f \right]
+
     """
 
     def __new__(cls, *args, **kwargs):
@@ -115,11 +113,6 @@ class Shooting(BaseAlgorithm):
         if self.derivative_method not in ['fd']:
             raise ValueError("Invalid derivative method specified. Valid options are 'csd' and 'fd'.")
 
-    def preprocess(self, problem_data, use_numba=False):
-        obj = super().preprocess(problem_data, use_numba=use_numba)
-        self.stm_ode_func = self.make_stmode(obj[0].deriv_func, problem_data['nOdes'])
-        return obj
-
     def _bc_jac_multi(self, t_list, nBCs, phi_full_list, y_list, parameters, aux, bc_func, StepSize=1e-6):
         p  = np.array(parameters)
         nParams = p.size
@@ -185,7 +178,6 @@ class Shooting(BaseAlgorithm):
     def make_stmode(odefn, nOdes, StepSize=1e-6):
         Xh = np.eye(nOdes)*StepSize
 
-        # @numba.jit(looplift=True, nopython=True)
         def _stmode_fd(t, _X, p, const, arc_idx):
             """ Finite difference version of state transition matrix """
             nParams = p.size
@@ -196,11 +188,11 @@ class Shooting(BaseAlgorithm):
             # Compute Jacobian matrix, F using finite difference
             fx = np.squeeze([odefn(t, X, p, const, arc_idx)])
 
-            for i in numba.prange(nOdes):
+            for i in range(nOdes):
                 fxh = odefn(t, X + Xh[i, :], p, const, arc_idx)
                 F[:, i] = (fxh-fx)/StepSize
 
-            for i in numba.prange(nParams):
+            for i in range(nParams):
                 p[i] += StepSize
                 fxh = odefn(t, X, p, const, arc_idx)
                 F[:, i+nOdes] = (fxh - fx).real / StepSize
@@ -235,9 +227,8 @@ class Shooting(BaseAlgorithm):
         nOdes = y0g.shape[0]
         paramGuess = sol.parameters
 
-        # Make the state-transition ode matrix if it hasn't already been made
-        if self.stm_ode_func is None:
-            self.stm_ode_func = self.make_stmode(deriv_func, y0g.shape[0])
+        # Make the state-transition ode matrix
+        self.stm_ode_func = self.make_stmode(deriv_func, y0g.shape[0])
 
         # Set up the boundary condition function
         self.bc_func = self._bc_func_multiple_shooting(bc_func=bc_func)

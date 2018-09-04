@@ -2,7 +2,6 @@
 import beluga
 import logging
 from math import pi
-import matplotlib.pyplot as plt
 
 ocp = beluga.OCP('brachisto')
 
@@ -11,8 +10,8 @@ ocp.independent('t', 's')
 
 # Define equations of motion
 ocp.state('x', 'v*cos(theta)', 'm')   \
-   .state('y', 'v*sin(theta)','m')   \
-   .state('v', 'g*sin(theta)','m/s')
+   .state('y', 'v*sin(theta)', 'm')   \
+   .state('v', 'g*sin(theta)', 'm/s')
 
 # Define controls
 ocp.control('theta','rad')
@@ -21,7 +20,7 @@ ocp.control('theta','rad')
 ocp.constant('g', -9.81, 'm/s^2')
 
 # Define costs
-ocp.path_cost('1', 's')
+ocp.path_cost('1', '1')
 
 # Define constraints
 ocp.constraints() \
@@ -32,9 +31,9 @@ ocp.constraints() \
     .terminal('y-y_f', 'm')
 
 # Use the "adjoined method" to solve for the constraints. (Default is False)
-# ocp.constraints().set_adjoined(True)
+ocp.constraints().set_adjoined(True)
 
-ocp.scale(m='y', s='y/v', kg=1, rad=1)
+ocp.scale(m='y', s='y/v', kg=1, rad=1, nd=1)
 
 bvp_solver = beluga.bvp_algorithm('Shooting',
                         derivative_method='fd',
@@ -61,7 +60,7 @@ continuation_steps.add_step('bisection') \
                 .terminal('x', 10) \
                 .terminal('y',-10)
 
-beluga.setup_beluga(logging_level=logging.DEBUG)
+beluga.setup_beluga(logging_level=logging.DEBUG, output_file='data.dill')
 
 sol = beluga.solve(ocp,
              method='traditional',

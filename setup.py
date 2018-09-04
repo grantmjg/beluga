@@ -5,8 +5,8 @@ import os, sys
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
-with open('README.rst') as file:
-    long_description = file.read()
+long_description = '''beluga is a Python library for trajectory optimization
+via indirect methods.'''
 
 modules = ['beluga.bvpsol',
            'beluga.bvpsol.algorithms',
@@ -15,6 +15,11 @@ modules = ['beluga.bvpsol',
            'beluga.continuation.strategies',
            'beluga.ivpsol',
            'beluga.ivpsol.integrators',
+           'beluga.liepack',
+           'beluga.liepack.domain.hspaces',
+           'beluga.liepack.domain.liealgebras',
+           'beluga.liepack.domain.liegroups',
+           'beluga.liepack.field',
            'beluga.optimlib',
            'beluga.utils',
            'beluga.visualization',
@@ -22,10 +27,18 @@ modules = ['beluga.bvpsol',
 
 tests = ['beluga.bvpsol.tests',
          'beluga.ivpsol.tests',
+         'beluga.liepack.domain.liealgebras.tests',
+         'beluga.liepack.tests',
          'beluga.optimlib.tests']
 
+dir_setup = os.path.dirname(os.path.realpath(__file__))
+
+with open(os.path.join(dir_setup, 'beluga', 'release.py')) as f:
+    # Defines __version__
+    exec(f.read())
+
 setup(name="beluga",
-      version='0.2.0',
+      version=__version__,
       description="An indirect trajectory optimization framework.",
       long_description=long_description,
       author="Michael Sparapany",
