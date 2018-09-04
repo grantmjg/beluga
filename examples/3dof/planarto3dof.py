@@ -104,11 +104,13 @@ continuation_steps.add_step('bisection') \
 
 beluga.setup_beluga(logging_level=logging.DEBUG)
 
-sol = beluga.solve(ocp,
-             method='traditional',
-             bvp_algorithm=bvp_solver,
-             steps=continuation_steps,
-             guess_generator=guess_maker)
+sol = beluga.solve(
+    ocp,
+    method='traditional',
+    bvp_algorithm=bvp_solver,
+    steps=continuation_steps,
+    guess_generator=guess_maker
+)
 
 
 '''
