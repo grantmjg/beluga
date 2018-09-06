@@ -44,11 +44,13 @@ class LieAlgebra(object):
         return LieAlgebra(self, newdata)
 
     def __eq__(self, other):
-        class_condition = type(self) == type(other)
+        class_condition = False
+        data_condition = False
         if isinstance(other, int) or isinstance(other, float):
             class_condition = True
             data_condition = (self.data == other*np.ones((self.shape))).all()
-        else:
+        elif isinstance(other, LieAlgebra):
+            class_condition = type(self) == type(other)
             data_condition = (self.data == other.data).all()
 
         return class_condition and data_condition
@@ -72,10 +74,7 @@ class LieAlgebra(object):
         return LieAlgebra(self, newdata)
 
     def __ne__(self, other):
-        class_condition = type(self) == type(other)
-        data_condition = (self.data == other.data).all()
-
-        return not (class_condition and data_condition)
+        return not (self == other)
 
     def __neg__(self):
         return LieAlgebra(self, -self.data)

@@ -1,3 +1,5 @@
+import abc
+
 from beluga.liepack.domain.liealgebras import *
 from beluga.liepack.domain.liegroups import *
 from beluga.liepack.domain.hspaces import *
@@ -42,6 +44,56 @@ def group2algebra(G):
         return sp
     if isinstance(G, LieGroup):
         return LieAlgebra
+
+class Morphism(object):
+    r"""
+    Abstract map superclass.
+
+    A map is defined
+    """
+    inputs = ()
+    outputs = ()
+    def __new__(cls, *args, **kwargs):
+        obj = super(Morphism, cls).__new__(cls)
+        obj.num_inputs = len(obj.inputs)
+        obj.num_outputs = len(obj.outputs)
+        obj._args = [None]*obj.num_inputs
+        obj._kwargs = dict()
+
+        if len(args) > 0:
+            return cls.__call__(obj, *args, **kwargs)
+        else:
+            return obj
+
+    def __call__(self, *args, **kwargs):
+        self._kwargs.update(kwargs)
+        k = 0
+        for arg in args:
+            if arg is not None:
+                cont = True
+                while (k < self.num_inputs) and cont:
+                    if self._args[k] is None:
+                        if isinstance(arg, self.inputs[k]):
+                            self._args[k] = arg
+                            k += 1
+                            cont = False
+                        else:
+                            raise TypeError
+                    else:
+                        k += 1
+            else:
+                k += 1
+
+        doit = all([element != None for element in self._args])
+
+        if doit == True:
+            return self.map(*self._args, **self._kwargs)
+        else:
+            return self
+
+    @abc.abstractmethod
+    def map(self, *args, **kwargs):
+        raise NotImplementedError
 
 
 class Adjoint(object):
@@ -96,7 +148,7 @@ class Adjoint(object):
             return LieAlgebra(g, G.data)*g*LieAlgebra(g, scipyinv(G.data))
 
 
-class Commutator(object):
+class Commutator(Morphism):
     r"""
     Commutator of two Lie algebra elements, :math:`g, h \in \mathfrak{g}`.
 
@@ -139,40 +191,13 @@ class Commutator(object):
     >>> adg(z) == -y
     True
     """
+    inputs = (LieAlgebra, LieAlgebra)
+    outputs = (LieAlgebra,)
 
-    def __new__(cls, *args, **kwargs):
-        obj = super(Commutator, cls).__new__(cls)
-        obj.anticommutator = int(kwargs.get('anticommutator', 1))
-        g, h = None, None
+    def map(self, g: LieAlgebra, h: LieAlgebra, **kwargs) -> LieAlgebra:
+        anticommutator = kwargs.get('anticommutator', 1)
+        return g*h - anticommutator*h*g
 
-        if len(args) > 0:
-            g = args[0]
-
-        if len(args) > 1:
-            h = args[1]
-
-        obj._g = g
-        obj._h = h
-        if g is not None and h is not None:
-            return cls.__call__(obj, *args, **kwargs)
-        else:
-            return obj
-
-    def __call__(self, *args, **kwargs):
-        k = 0
-        if self._g is None:
-            g = args[k]
-            k += 1
-        else:
-            g = self._g
-
-        if self._h is None:
-            h = args[k]
-            k += 1
-        else:
-            h = self._h
-
-        return g*h - self.anticommutator*h*g
 
 def dexpinv(g, h, order=5):
     r"""
