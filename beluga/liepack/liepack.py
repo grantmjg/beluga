@@ -66,6 +66,29 @@ class Morphism(object):
             return obj
 
     def __call__(self, *args, **kwargs):
+        incl = sum([element != None for element in self._args])
+        inar = sum([element != None for element in args])
+        k = 0
+        if incl + inar >= self.num_inputs:
+            import copy
+            _args = copy.copy(self._args)
+            for arg in args:
+                if arg is not None:
+                    cont = True
+                    while (k < self.num_inputs) and cont:
+                        if self._args[k] is None:
+                            if isinstance(arg, self.inputs[k]):
+                                _args[k] = arg
+                                k += 1
+                                cont = False
+                            else:
+                                raise TypeError
+                        else:
+                            k += 1
+                else:
+                    k += 1
+            return self.map(*_args, **self._kwargs)
+
         self._kwargs.update(kwargs)
         k = 0
         for arg in args:
