@@ -45,7 +45,7 @@ def group2algebra(G):
     if isinstance(G, LieGroup):
         return LieAlgebra
 
-class Morphism(object):
+class Map(object):
     r"""
     Abstract map superclass.
 
@@ -54,7 +54,7 @@ class Morphism(object):
     inputs = ()
     outputs = ()
     def __new__(cls, *args, **kwargs):
-        obj = super(Morphism, cls).__new__(cls)
+        obj = super(Map, cls).__new__(cls)
         obj.num_inputs = len(obj.inputs)
         obj.num_outputs = len(obj.outputs)
         obj._args = [None]*obj.num_inputs
@@ -173,7 +173,7 @@ class Adjoint(object):
             return LieAlgebra(g, G.data)*g*LieAlgebra(g, scipyinv(G.data))
 
 
-class Commutator(Morphism):
+class Commutator(Map):
     r"""
     Commutator of two Lie algebra elements, :math:`g, h \in \mathfrak{g}`.
 
