@@ -87,7 +87,9 @@ class Morphism(object):
                             k += 1
                 else:
                     k += 1
-            return self.map(*_args, **self._kwargs)
+            kw = copy.copy(self._kwargs)
+            kw.update(kwargs)
+            return self.map(*_args, **kw)
 
         self._kwargs.update(kwargs)
         k = 0
@@ -217,7 +219,7 @@ class Commutator(Morphism):
     inputs = (LieAlgebra, LieAlgebra)
     outputs = (LieAlgebra,)
 
-    def map(self, g: LieAlgebra, h: LieAlgebra, **kwargs) -> LieAlgebra:
+    def map(self, g, h, **kwargs):
         anticommutator = kwargs.get('anticommutator', 1)
         return g*h - anticommutator*h*g
 
