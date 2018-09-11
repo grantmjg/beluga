@@ -42,79 +42,147 @@ class Shooting(BaseAlgorithm):
 
     """
 
-    def __new__(cls, *args, **kwargs):
+    # def __new__(cls, *args, **kwargs):
+    #     """
+    #     Creates a new Shooting object.
+    #
+    #     :param args: Unused
+    #     :param kwargs: Additional parameters accepted by the solver.
+    #     :return: Shooting object.
+    #
+    #     +------------------------+-----------------+-----------------+
+    #     | Valid kwargs           | Default Value   | Valid Values    |
+    #     +========================+=================+=================+
+    #     | cached                 | True            | Bool            |
+    #     +------------------------+-----------------+-----------------+
+    #     | derivative_method      | 'fd'            | {'fd','csd'}    |
+    #     +------------------------+-----------------+-----------------+
+    #     | ivp_args               | {}              | see `ivpsol`    |
+    #     +------------------------+-----------------+-----------------+
+    #     | tolerance              | 1e-4            | > 0             |
+    #     +------------------------+-----------------+-----------------+
+    #     | max_error              | 100             | > 0             |
+    #     +------------------------+-----------------+-----------------+
+    #     | max_iterations         | 100             | > 0             |
+    #     +------------------------+-----------------+-----------------+
+    #     | num_arcs               | 1               | > 0             |
+    #     +------------------------+-----------------+-----------------+
+    #     | num_cpus               | 1               | > 0             |
+    #     +------------------------+-----------------+-----------------+
+    #     | use_numba              | False           | Bool            |
+    #     +------------------------+-----------------+-----------------+
+    #     | verbose                | False           | Bool            |
+    #     +------------------------+-----------------+-----------------+
+    #     """
+    #
+    #     obj = super(Shooting, cls).__new__(cls, *args, **kwargs)
+    #
+    #     cached = kwargs.get('cached', True)
+    #     derivative_method = kwargs.get('derivative_method', 'fd')
+    #     ivp_args = kwargs.get('ivp_args', dict())
+    #     tolerance = kwargs.get('tolerance', 1e-4)
+    #     max_error = kwargs.get('max_error', 100)
+    #     max_iterations = kwargs.get('max_iterations', 100)
+    #     num_arcs = kwargs.get('num_arcs', 1)
+    #     num_cpus = kwargs.get('num_cpus', 1)
+    #     use_numba = kwargs.get('use_numba', False)
+    #     verbose = kwargs.get('verbose', False)
+    #
+    #     obj.cached = cached
+    #     obj.derivative_method = derivative_method
+    #     obj.ivp_args = ivp_args
+    #     obj.tolerance = tolerance
+    #     obj.max_error = max_error
+    #     obj.max_iterations = max_iterations
+    #     obj.num_arcs = num_arcs
+    #     obj.num_cpus = num_cpus
+    #     obj.use_numba = use_numba
+    #     obj.verbose = verbose
+    #
+    #     obj.pool = None
+    #
+    #     return obj
+
+    def __init__(self, cached=True, derivative_method='fd', ivp_args={}, tolerance=1e-4, max_error=100,
+                 max_iterations=100, num_arcs=1, num_cpus=1, use_numba=False, verbose=True):
+
         """
-        Creates a new Shooting object.
+            #     Initializes a new Shooting object.
+            #
+            #     :param args: Unused
+            #     :param kwargs: Additional parameters accepted by the solver.
+            #     :return: Shooting object.
+            #
+            #     +------------------------+-----------------+-----------------+
+            #     | Valid kwargs           | Default Value   | Valid Values    |
+            #     +========================+=================+=================+
+            #     | cached                 | True            | Bool            |
+            #     +------------------------+-----------------+-----------------+
+            #     | derivative_method      | 'fd'            | {'fd','csd'}    |
+            #     +------------------------+-----------------+-----------------+
+            #     | ivp_args               | {}              | see `ivpsol`    |
+            #     +------------------------+-----------------+-----------------+
+            #     | tolerance              | 1e-4            | > 0             |
+            #     +------------------------+-----------------+-----------------+
+            #     | max_error              | 100             | > 0             |
+            #     +------------------------+-----------------+-----------------+
+            #     | max_iterations         | 100             | > 0             |
+            #     +------------------------+-----------------+-----------------+
+            #     | num_arcs               | 1               | > 0             |
+            #     +------------------------+-----------------+-----------------+
+            #     | num_cpus               | 1               | > 0             |
+            #     +------------------------+-----------------+-----------------+
+            #     | use_numba              | False           | Bool            |
+            #     +------------------------+-----------------+-----------------+
+            #     | verbose                | False           | Bool            |
+            #     +------------------------+-----------------+-----------------+
+            #     """
 
-        :param args: Unused
-        :param kwargs: Additional parameters accepted by the solver.
-        :return: Shooting object.
+        self.cached = cached
+        self.derivative_method = derivative_method
+        self.ivp_args = ivp_args
+        self.tolerance = tolerance
+        self.max_error = max_error
+        self.max_iterations = max_iterations
+        self.num_arcs = num_arcs
+        self.num_cpus = num_cpus
+        self.use_numba = use_numba
+        self.verbose = verbose
 
-        +------------------------+-----------------+-----------------+
-        | Valid kwargs           | Default Value   | Valid Values    |
-        +========================+=================+=================+
-        | cached                 | True            | Bool            |
-        +------------------------+-----------------+-----------------+
-        | derivative_method      | 'fd'            | {'fd','csd'}    |
-        +------------------------+-----------------+-----------------+
-        | ivp_args               | {}              | see `ivpsol`    |
-        +------------------------+-----------------+-----------------+
-        | tolerance              | 1e-4            | > 0             |
-        +------------------------+-----------------+-----------------+
-        | max_error              | 100             | > 0             |
-        +------------------------+-----------------+-----------------+
-        | max_iterations         | 100             | > 0             |
-        +------------------------+-----------------+-----------------+
-        | num_arcs               | 1               | > 0             |
-        +------------------------+-----------------+-----------------+
-        | num_cpus               | 1               | > 0             |
-        +------------------------+-----------------+-----------------+
-        | use_numba              | False           | Bool            |
-        +------------------------+-----------------+-----------------+
-        | verbose                | False           | Bool            |
-        +------------------------+-----------------+-----------------+
-        """
-
-        obj = super(Shooting, cls).__new__(cls, *args, **kwargs)
-
-        cached = kwargs.get('cached', True)
-        derivative_method = kwargs.get('derivative_method', 'fd')
-        ivp_args = kwargs.get('ivp_args', dict())
-        tolerance = kwargs.get('tolerance', 1e-4)
-        max_error = kwargs.get('max_error', 100)
-        max_iterations = kwargs.get('max_iterations', 100)
-        num_arcs = kwargs.get('num_arcs', 1)
-        num_cpus = kwargs.get('num_cpus', 1)
-        use_numba = kwargs.get('use_numba', False)
-        verbose = kwargs.get('verbose', False)
-
-        obj.cached = cached
-        obj.derivative_method = derivative_method
-        obj.ivp_args = ivp_args
-        obj.tolerance = tolerance
-        obj.max_error = max_error
-        obj.max_iterations = max_iterations
-        obj.num_arcs = num_arcs
-        obj.num_cpus = num_cpus
-        obj.use_numba = use_numba
-        obj.verbose = verbose
-
-        obj.pool = None
-
-        return obj
-
-    def __init__(self, *args, **kwargs):
         self.stm_ode_func = None
         self.saved_code = True
 
         if self.num_cpus > 1:
             self.pool = pool.Pool(processes=self.num_cpus)
+        else:
+            self.pool = None
 
         if self.derivative_method not in ['fd']:
             raise ValueError("Invalid derivative method specified. Valid options are 'csd' and 'fd'.")
 
-    def _bc_jac_multi(self, t_list, nBCs, phi_full_list, y_list, parameters, aux, bc_func, StepSize=1e-6):
-        p  = np.array(parameters)
+        self.deriv_func = None
+        self.quad_func = None
+
+        # Make the state-transition ode matrix
+        self.stm_ode_func = None
+
+        # Set up the boundary condition function
+        self.bc_func = None
+
+    def load_problem_info(self, deriv_func, quad_func, bc_func, n_odes):
+
+        self.deriv_func = deriv_func
+        self.quad_func = quad_func
+
+        # Make the state-transition ode matrix
+        self.stm_ode_func = self.make_stmode(deriv_func, n_odes)
+
+        # Set up the boundary condition function
+        self.bc_func = self._bc_func_multiple_shooting(bc_func=bc_func)
+
+    @staticmethod
+    def _bc_jac_multi(t_list, nBCs, phi_full_list, y_list, parameters, aux, bc_func, StepSize=1e-6):
+        p = np.array(parameters)
         nParams = p.size
         h = StepSize
         ya = np.array([traj[0] for traj in y_list]).T
@@ -127,7 +195,7 @@ class Shooting(BaseAlgorithm):
         M = np.zeros((nBCs, nOdes))
         P = np.zeros((nBCs, p.size))
         Ptemp = np.zeros((nBCs, p.size))
-        J = np.zeros((nBCs, (nOdes)*num_arcs+p.size))
+        J = np.zeros((nBCs, nOdes*num_arcs+p.size))
         dx = np.zeros((nOdes+nParams, num_arcs))
 
         for arc_idx, phi in zip(it.count(), phi_full_list):
@@ -136,11 +204,11 @@ class Shooting(BaseAlgorithm):
                 dx[i, arc_idx] = dx[i, arc_idx] + h
                 dy = np.dot(phi[-1], dx)
                 f = bc_func(t_list[0][0], ya + dx[:nOdes], [], t_list[-1][-1], yb + dy, [], p, aux)
-                M[:,i] = (f-fx)/h
+                M[:, i] = (f-fx)/h
                 dx[i, arc_idx] = dx[i, arc_idx] - h
             J_i = M
             J_slice = slice(nOdes*arc_idx, nOdes*(arc_idx+1))
-            J[:,J_slice] = J_i
+            J[:, J_slice] = J_i
 
         for arc_idx, phi in zip(it.count(), phi_full_list):
             for i in range(p.size):
@@ -149,7 +217,7 @@ class Shooting(BaseAlgorithm):
                 dx[j, arc_idx] = dx[j, arc_idx] + h
                 dy = np.dot(phi[-1], dx)
                 f = bc_func(t_list[0][0], ya, [], t_list[-1][-1], yb + dy, [], p, aux)
-                Ptemp[:,i] = (f-fx)/h
+                Ptemp[:, i] = (f-fx)/h
                 dx[j, arc_idx] = dx[j, arc_idx] - h
                 p[i] = p[i] - h
             P += Ptemp
@@ -161,12 +229,13 @@ class Shooting(BaseAlgorithm):
 
         return J
 
-    def _bc_func_multiple_shooting(self, bc_func=None):
+    @staticmethod
+    def _bc_func_multiple_shooting(bc_func=None):
         def _bc_func(t0, y0, q0, tf, yf, qf, paramGuess, aux):
             bc1 = np.array(bc_func(t0, y0, q0, tf, yf, qf, paramGuess, aux)).flatten()
             narcs = y0.shape[1]
             bc2 = np.array([y0[:, ii + 1] - yf[:, ii] for ii in range(narcs - 1)]).flatten()
-            bc = np.hstack((bc1,bc2))
+            bc = np.hstack((bc1, bc2))
             return bc
 
         def wrapper(t0, y0, q0, tf, yf, qf, paramGuess, aux):
@@ -205,7 +274,7 @@ class Shooting(BaseAlgorithm):
             return _stmode_fd(t, _X, p, const, arc_idx)
         return wrapper
 
-    def solve(self, deriv_func, quad_func, bc_func, solinit):
+    def solve(self, solinit):
         """
         Solve a two-point boundary value problem using the shooting method.
 
@@ -226,12 +295,6 @@ class Shooting(BaseAlgorithm):
         y0g = sol.y[0, :]
         nOdes = y0g.shape[0]
         paramGuess = sol.parameters
-
-        # Make the state-transition ode matrix
-        self.stm_ode_func = self.make_stmode(deriv_func, y0g.shape[0])
-
-        # Set up the boundary condition function
-        self.bc_func = self._bc_func_multiple_shooting(bc_func=bc_func)
 
         if sol.arcs is None:
             sol.arcs = [(0, len(solinit.t)-1)]

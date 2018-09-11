@@ -63,6 +63,7 @@ import importlib
 
 import docopt
 
+
 def load_scenario(scenario_name):
     """Loads a scenario from python module name or file name/path"""
     # TODO: Log error messages on failure
@@ -103,19 +104,19 @@ def load_scenario(scenario_name):
 def main():
     options = docopt.docopt(__doc__,version=0.1)
 
-    levels = {  'ALL': logging.DEBUG,
-                'DEBUG': logging.DEBUG,
-                '0': logging.DEBUG,
-                'INFO': logging.INFO,
-                '1': logging.INFO,
-                'WARNING': logging.WARN,
-                'WARN': logging.WARN,
-                '2': logging.WARN,
-                'ERROR': logging.ERROR,
-                '3': logging.ERROR,
-                'CRITICAL': logging.CRITICAL,
-                '4': logging.CRITICAL,
-                'OFF': logging.CRITICAL + 1}
+    levels = {'ALL': logging.DEBUG,
+              'DEBUG': logging.DEBUG,
+              '0': logging.DEBUG,
+              'INFO': logging.INFO,
+              '1': logging.INFO,
+              'WARNING': logging.WARN,
+              'WARN': logging.WARN,
+              '2': logging.WARN,
+              'ERROR': logging.ERROR,
+              '3': logging.ERROR,
+              'CRITICAL': logging.CRITICAL,
+              '4': logging.CRITICAL,
+              'OFF': logging.CRITICAL + 1}
 
     # Process logging options
     if options['--nolog']:
@@ -141,11 +142,10 @@ def main():
         output = os.path.abspath(options['--output'][0].strip())
         # Check if the file locaton is writeable
         if not os.access(os.path.dirname(output), os.W_OK):
-            print('Unable to access output file location or invalid filename 😭 😭')
+            print('Unable to access output file location or invalid filename')
             return
     else:
         output = None
-
 
     import builtins
     # import beluga

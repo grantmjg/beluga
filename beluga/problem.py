@@ -39,7 +39,7 @@ class OCP(object):
         self._properties = {}  # Problem properties
         self._constraints = ConstraintList()
 
-        self._scaling = Scaling()
+        self.scaling = Scaling()
 
     # Alias for returning cost function by type
     def get_cost(self, cost_type):
@@ -126,7 +126,7 @@ class OCP(object):
     def scale(self, **scale_mappings):
         """Defines scaling for dimensional units in the problem."""
         for unit, scale_expr in scale_mappings.items():
-            self._scaling.unit(unit, scale_expr)
+            self.scaling.unit(unit, scale_expr)
 
     def __str__(self):
         """
@@ -184,25 +184,20 @@ class ConstraintList(dict):
 
     # Aliases for defining constraints of different types
     constraint_args = ('expr', 'unit')
-    initial = partialmethod(add_constraint, constraint_type='initial',
-                constraint_args=constraint_args)
-    terminal = partialmethod(add_constraint, constraint_type='terminal',
-                constraint_args=constraint_args)
-    equality = partialmethod(add_constraint, constraint_type='equality',
-                constraint_args=constraint_args)
-    interior_point = partialmethod(add_constraint, constraint_type='interior_point',
-                constraint_args=constraint_args)
-    independent = partialmethod(add_constraint, constraint_type='independent',
-                constraint_args=constraint_args)
+    initial = partialmethod(add_constraint, constraint_type='initial', constraint_args=constraint_args)
+    terminal = partialmethod(add_constraint, constraint_type='terminal', constraint_args=constraint_args)
+    equality = partialmethod(add_constraint, constraint_type='equality', constraint_args=constraint_args)
+    interior_point = partialmethod(add_constraint, constraint_type='interior_point', constraint_args=constraint_args)
+    independent = partialmethod(add_constraint, constraint_type='independent', constraint_args=constraint_args)
     path = partialmethod(add_constraint, constraint_type='path',
-                constraint_args=('name', 'expr', 'direction', 'bound', 'unit', 'start_eps')
-                )
+                         constraint_args=('name', 'expr', 'direction', 'bound', 'unit', 'start_eps'))
 
     # def get(self, constraint_type):
     #     """
     #     Returns list of constraints of a specific type
     #     """
     #     return [c for c in self if c.type == constraint_type]
+
 
 def _combine_args_kwargs(arg_list, args, kwargs, fillvalue=''):
     """Combines positional and keyword arguments
@@ -226,7 +221,7 @@ def _combine_args_kwargs(arg_list, args, kwargs, fillvalue=''):
     pos_args = {key: val for (key, val) in
                 zip_longest(arg_list, args, fillvalue=fillvalue)}
     arg_dict = dict(ChainMap(kwargs, pos_args))
-    return (arg_dict)
+    return arg_dict
 
 
 class SymVar(object):
@@ -267,8 +262,10 @@ class SymVar(object):
     def __eq__(self, other):
         return str(self._sym) == str(other)
 
+
 BVP = namedtuple('BVP', 'deriv_func bc_func compute_control path_constraints')
-BVP.__new__.__defaults__ = (None,) # path constraints optional
+BVP.__new__.__defaults__ = (None,)  # path constraints optional
+
 
 class GuessGenerator(object):
     """Generates the initial guess from a variety of sources."""
@@ -372,6 +369,7 @@ class GuessGenerator(object):
         self.param_guess = param_guess
         self.control_guess = control_guess
         self.use_control_guess = use_control_guess
+
 
     def auto(self, bvp_fn, solinit, param_guess=None):
         """Generates initial guess by forward/reverse integration."""

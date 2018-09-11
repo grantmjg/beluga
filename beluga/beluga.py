@@ -44,7 +44,7 @@ def guess_generator(*args, **kwargs):
     Helper for creating Initial guess generator.
     """
     guess_gen = problem.GuessGenerator()
-    guess_gen.setup(*args,**kwargs)
+    guess_gen.setup(*args, **kwargs)
     return guess_gen
 
 
@@ -82,18 +82,18 @@ def solve(ocp, method, bvp_algorithm, steps, guess_generator, output_file='data.
     ocp_ws['problem_data']['custom_functions'] = ocp.custom_functions()
     solinit = Solution()
 
-    solinit.aux['const'] = OrderedDict((str(const.name),float(const.value))
-                                for const in ocp_ws['constants'])
+    solinit.aux['const'] = OrderedDict((str(const.name), float(const.value))
+                                       for const in ocp_ws['constants'])
 
     solinit.aux['parameters'] = ocp_ws['problem_data']['parameter_list']
 
     # For path constraints
     solinit.aux['constraint'] = cl.defaultdict(float)
-    solinit.aux['constraints'] = dict((s['name'], {'unit':str(s['unit']),
-                                                   'expr':str(s['expr']),
+    solinit.aux['constraints'] = dict((s['name'], {'unit': str(s['unit']),
+                                                   'expr': str(s['expr']),
                                                    'direction': s['direction'],
                                                    'arc_type': i,
-                                                   'pi_list':[str(_) for _ in s['pi_list']]})
+                                                   'pi_list': [str(_) for _ in s['pi_list']]})
                                       for i, s in enumerate(ocp_ws['problem_data']['s_list'],1))
 
     solinit.aux['arc_seq'] = (0,)
@@ -106,8 +106,8 @@ def solve(ocp, method, bvp_algorithm, steps, guess_generator, output_file='data.
     initial_states = solinit.y[0, :]
     terminal_states = solinit.y[-1, :]
 
-    initial_bc = dict(zip(state_names,initial_states))
-    terminal_bc = dict(zip(state_names,terminal_states))
+    initial_bc = dict(zip(state_names, initial_states))
+    terminal_bc = dict(zip(state_names, terminal_states))
 
     solinit.aux['initial'] = initial_bc
     solinit.aux['terminal'] = terminal_bc
@@ -118,14 +118,14 @@ def solve(ocp, method, bvp_algorithm, steps, guess_generator, output_file='data.
 
     out['problem_data'] = ocp_ws['problem_data']
 
-    ocp._scaling.initialize(ocp_ws)
-    ocp_ws['scaling'] = ocp._scaling
+    ocp.scaling.initialize(ocp_ws)
+    ocp_ws['scaling'] = ocp.scaling
 
     out['solution'] = run_continuation_set(ocp_ws, bvp_algorithm, steps, bvp_fn, solinit, bvp)
     total_time = toc()
 
     logging.info('Continuation process completed in %0.4f seconds.\n' % total_time)
-    bvp_algorithm.close()
+    # bvp_algorithm.close()
 
     # Final time is appended as a parameter, so scale the output x variables to show the correct time
     for continuation_set in out['solution']:
@@ -158,6 +158,7 @@ def run_continuation_set(ocp_ws, bvp_algo, steps, bvp_fn, solinit, bvp):
     # Initialize scaling
     s = ocp_ws['scaling']
     problem_data = ocp_ws['problem_data']
+    bvp_algo.load_problem_info(bvp.deriv_func, None, bvp.bc_func, problem_data['nOdes'])
     try:
         sol_guess = solinit
         sol = None
@@ -177,7 +178,7 @@ def run_continuation_set(ocp_ws, bvp_algo, steps, bvp_fn, solinit, bvp):
                 s.compute_scaling(sol_guess)
                 sol_guess = s.scale(sol_guess)
 
-                sol = bvp_algo.solve(bvp.deriv_func, None, bvp.bc_func, sol_guess)
+                sol = bvp_algo.solve(sol_guess)
                 step.last_sol.converged = sol.converged
                 sol = s.unscale(sol)
 
@@ -188,20 +189,12 @@ def run_continuation_set(ocp_ws, bvp_algo, steps, bvp_fn, solinit, bvp):
                     sol.ctrl_expr = problem_data['control_options']
                     sol.ctrl_vars = problem_data['control_list']
 
-                    # TODO: Make control computation more efficient
-                    # for i in range(len(sol.x)):
-                    #     _u = bvp.control_func(sol.x[i],sol.y[:,i],sol.parameters,sol.aux)
-                    #     sol.u[:,i] = _u
+                    def _f(_t, _X):
+                        return bvp_fn.compute_control(_t, _X, sol.parameters, sol.aux)
 
-                    ## DAE mode
-                    # sol.u = sol.y[problem_data['num_states']:,:]
-                    # Non-DAE:
-                    f = lambda _t, _X: bvp_fn.compute_control(_t, _X, sol.parameters, sol.aux)
-                    sol.u = np.array(list(map(f, sol.t, list(sol.y))))
-                    # keyboard()
+                    sol.u = np.array(list(map(_f, sol.t, list(sol.y))))
 
-                    # Copy solution object for storage and reuse `sol` in next
-                    # iteration
+                    # Copy solution object for storage and reuse `sol` in next iteration
                     solution_set[step_idx].append(copy.deepcopy(sol))
                     sol_guess = copy.deepcopy(sol)
                     elapsed_time = toc()

@@ -9,7 +9,8 @@ class Collocation(BaseAlgorithm):
     """
     Collocation algorithm for solving boundary value problems.
     """
-    def __new__(cls, *args, **kwargs):
+    def __init__(self, cached=True, tolerance=1e-4, max_error=100, max_iterations=100, number_of_nodes=40,
+                 use_numba=False, verbose=False):
         """
         Creates a new Collocation object.
 
@@ -35,27 +36,26 @@ class Collocation(BaseAlgorithm):
         | verbose                | False           | Bool            |
         +------------------------+-----------------+-----------------+
         """
-        
-        obj = super(Collocation, cls).__new__(cls, *args, **kwargs)
 
-        cached = kwargs.get('cached', True)
-        tolerance = kwargs.get('tolerance', 1e-4)
-        max_error = kwargs.get('max_error', 100)
-        max_iterations = kwargs.get('max_iterations', 100)
-        number_of_nodes = kwargs.get('number_of_nodes', 40)
-        use_numba = kwargs.get('use_numba', False)
-        verbose = kwargs.get('verbose', False)
+        self.cached = cached
+        self.tolerance = tolerance
+        self.max_error = max_error
+        self.max_iterations = max_iterations
+        self.number_of_nodes = number_of_nodes
+        self.use_numba = use_numba
+        self.verbose = verbose
 
-        obj.cached = cached
-        obj.tolerance = tolerance
-        obj.max_error = max_error
-        obj.max_iterations = max_iterations
-        obj.number_of_nodes = number_of_nodes
-        obj.use_numba = use_numba
-        obj.verbose = verbose
-        return obj
+        self.eoms = None
+        self.quadratures = None
+        self.bcs = None
+
+    def load_problem_info(self, deriv_func, quad_func, bc_func, n_odes):
+
+        self.eoms = deriv_func
+        self.quadratures = quad_func
+        self.bcs = bc_func
     
-    def solve(self, deriv_func, quad_func, bc_func, solinit):
+    def solve(self, solinit):
         """
         Solve a two-point boundary value problem using the collocation method.
 
@@ -79,15 +79,15 @@ class Collocation(BaseAlgorithm):
             sol.y = new_y
             sol.q = new_q
             sol.u = new_u
-            if quad_func is not None:
-                raise NotImplemented # TODO: Put reconstruction of q's in Trajectory()? Or leave in ivpsol?
+            if self.quadratures is not None:
+                raise NotImplemented  # TODO: Put reconstruction of q's in Trajectory()? Or leave in ivpsol?
 
         # Set up some required class functions for collocation
-        self.eoms = deriv_func
-        self.quadratures = quad_func
+        # self.eoms = deriv_func
+        # self.quadratures = quad_func
         self.path_cost = None # TODO: Assumed to be indirect. This class can handle direct with some work.
         self.terminal_cost = None # TODO: Assumed to be indirect.
-        self.bcs = bc_func
+        # self.bcs = bc_func
 
         # self.constraint = {'type': 'eq', 'fun': self._collocation_constraint}
         self.constraint_midpoint = {'type': 'eq', 'fun': self._collocation_constraint_midpoint}

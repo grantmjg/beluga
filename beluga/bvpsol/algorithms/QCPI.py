@@ -17,6 +17,7 @@ import beluga
 # def create_odefn(problem_data, module):
 #
 
+
 def create_module(problem_data):
     """Creates a new module for storing compiled code.
 
@@ -32,6 +33,7 @@ def create_module(problem_data):
     problem_name = problem_data['problem_name']
     module = imp.new_module('_beluga_'+problem_name)
     return module
+
 
 def load_eqn_template(problem_data, template_file,
                         renderer = pystache.Renderer(escape=lambda u: u)):
@@ -58,6 +60,7 @@ def load_eqn_template(problem_data, template_file,
         # Render the template using the data
         code = renderer.render(tmpl, problem_data)
         return code
+
 
 def compile_code_py(code_string, module, function_name):
     """
