@@ -34,7 +34,7 @@ ocp.control('alfa','rad')
 
 # Define constants
 ocp.constant('mu', 3.986e5*1e9, 'm^3/s^2')  # Gravitational parameter, m^3/s^2
-ocp.constant('rho0', 0.0001*1.2, 'kg/m^3')  # Sea-level atmospheric density, kg/m^3
+ocp.constant('rho0', 1.2, 'kg/m^3')  # Sea-level atmospheric density, kg/m^3
 ocp.constant('H', 7500, 'm')  # Scale height for atmosphere of Earth, m
 
 ocp.constant('mass', 750/2.2046226, 'kg')  # Mass of vehicle, kg
@@ -75,29 +75,22 @@ continuation_steps = beluga.init_continuation()
 
 # Start by flying straight towards the ground
 continuation_steps.add_step('bisection') \
-                .num_cases(11) \
+                .num_cases(3) \
                 .terminal('h', 0)
 
-# Slowly turn up the density
-continuation_steps.add_step('bisection') \
-                .num_cases(11) \
-                .const('rho0', 1.2)
-
-# Move downrange out a tad
-continuation_steps.add_step('bisection') \
-                .num_cases(11) \
-                .terminal('theta', 0.01*pi/180)
-
-# Bring flight-path angle up slightly to activate the control
-continuation_steps.add_step('bisection') \
-                .num_cases(11) \
-                .initial('gam', -70*pi/180) \
-                .terminal('theta', 0.5*pi/180)
-
-# Move downrange down a bit
+#
 continuation_steps.add_step('bisection') \
                 .num_cases(21) \
-                .terminal('theta', 1*pi/180)
+                .initial('gam', 0*pi/180) \
+                .terminal('theta', 5*pi/180)
+
+continuation_steps.add_step('bisection') \
+                .num_cases(11) \
+                .terminal('theta', 15*pi/180)
+
+continuation_steps.add_step('bisection') \
+                .num_cases(21) \
+                .terminal('theta', 20*pi/180)
 
 beluga.setup_beluga(logging_level=logging.DEBUG)
 
