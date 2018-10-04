@@ -7,6 +7,8 @@ from beluga.bvpsol.algorithms.BaseAlgorithm import BaseAlgorithm
 from beluga.ivpsol import Propagator, integrate_quads, Trajectory, reconstruct
 from multiprocessing_on_dill import pool
 
+import dill
+
 
 class Shooting(BaseAlgorithm):
     r"""
@@ -82,7 +84,8 @@ class Shooting(BaseAlgorithm):
         if self.num_cpus > 1:
             self.pool = pool.Pool(processes=self.num_cpus)
 
-    def _bc_jac_multi(self, t_list, nBCs, nquads, phi_full_list, y_list, q_list, parameters, nondynamical_params, aux, quad_func, bc_func, StepSize=1e-6):
+    @staticmethod
+    def _bc_jac_multi(t_list, nBCs, nquads, phi_full_list, y_list, q_list, parameters, nondynamical_params, aux, quad_func, bc_func, StepSize=1e-6):
         parameters = np.array(parameters)
         h = StepSize
         t0 = t_list[0][0]
@@ -197,9 +200,84 @@ class Shooting(BaseAlgorithm):
             phiDot = np.dot(np.vstack((F, np.zeros((nParams, nParams + nOdes)))), np.vstack((phi, np.hstack((np.zeros((nParams, nOdes)), np.eye(nParams))))))[:nOdes, :]
             return np.hstack((fx, np.reshape(phiDot, (nOdes * (nOdes + nParams)))))
 
-        def wrapper(t, _X, p, const, arc_idx):  # needed for scipy
-            return _stmode_fd(t, _X, p, const, arc_idx)
-        return wrapper
+        return _stmode_fd
+
+    def compute_y_and_stm(self, tspan_list, ya, q0, stm0, p, aux, n_odes):
+        phi_full_list = []
+        t_list = []
+        y_list = []
+        q_list = []
+
+        nquads = q0.size
+        y0stm = np.zeros((len(stm0) + n_odes))
+        yb = np.zeros_like(ya)
+
+        for arc_idx, tspan in enumerate(tspan_list):
+            y0stm[:n_odes] = ya[arc_idx, :]
+            y0stm[n_odes:] = stm0[:]
+            q0 = []
+            sol_ivp = self.prop(self.stm_ode_func, self.quadrature_function, tspan, y0stm, q0, p, aux, 0)  # TODO: arc_idx is hardcoded as 0 here, this'll change with path constraints. I51
+            t = sol_ivp.t
+            yy = sol_ivp.y
+            qq = sol_ivp.q
+            t_list.append(t)
+            y_list.append(yy[:, :n_odes])
+            if nquads > 0:
+                q_list.append(qq[:, :nquads])
+            yb[arc_idx, :] = yy[-1, :n_odes]
+            phi_full = np.reshape(yy[:, n_odes:], (len(t), n_odes, n_odes + len(p)))
+            phi_full_list.append(np.copy(phi_full))
+
+        return t_list, y_list, q_list, phi_full_list, ya, yb
+
+    def compute_y(self, tspan_list, ya, q0, p, aux):
+        t_list = []
+        y_list = []
+        q_list = []
+        nquads = q0.size
+        yb = np.zeros_like(ya)
+
+        for arc_idx, tspan in enumerate(tspan_list):
+            y0 = ya[arc_idx, :]
+            sol_ivp = self.prop(self.derivative_function, self.quadrature_function, tspan, y0, q0, p, aux, 0)
+            t = sol_ivp.t
+            yy = sol_ivp.y
+            qq = sol_ivp.q
+            t_list.append(t)
+            y_list.append(yy[:, :])
+            if nquads > 0:
+                q_list.append(qq[:, :nquads])
+            yb[arc_idx, :] = yy[-1, :]
+
+        return t_list, y_list, q_list, ya, yb
+
+    @staticmethod
+    def shoot_single(data_in):
+
+        _prop = dill.loads(data_in[0])
+        _f = dill.loads(data_in[1])
+
+        return _prop(_f, *data_in[2:])
+
+    def compute_y_parallel(self, tspan_list, ya, p, aux):
+
+        data_in = []
+        for tspan, y0 in zip(tspan_list, ya):
+            data_in += [(self.prop_byte, self.deriv_func_byte, None, tspan, y0, [], p, aux, 0)]
+
+        sols_ivp = list(self.pool.map(self.shoot_single, data_in))
+
+        t_list = []
+        y_list = []
+        yb = []
+        for sol_ivp in sols_ivp:
+            t = sol_ivp.t
+            yy = sol_ivp.y
+            y_list.append(yy[:, :])
+            t_list.append(t)
+            yb += [yy[-1, :]]
+
+        return t_list, y_list, ya, yb
 
     def solve(self, solinit):
         """
@@ -245,22 +323,14 @@ class Shooting(BaseAlgorithm):
 
         arc_seq = sol.aux['arc_seq']
         num_arcs = len(arc_seq)
-        # if len(sol.arcs) % 2 == 0:
-        #     raise Exception('Number of arcs must be odd!')
 
-        # TODO: These are specific to an old implementation of path constraints see I51
-        left_idx, right_idx = map(np.array, zip(*sol.arcs))
-        ya = sol.y[left_idx, :]
-        yb = sol.y[right_idx, :]
-        tmp = np.arange(num_arcs+1, dtype=np.float32)*sol.t[-1] # TODO: I51
-        tspan_list = [(a, b) for a, b in zip(tmp[:-1], tmp[1:])] # TODO: I51
-
+        self.prop = Propagator(**self.ivp_args)
         # sol.set_interpolate_function('cubic')
         ya = None
         tspan_list = []
         t0 = sol.t[0]
         ti = np.linspace(sol.t[0], sol.t[-1], self.num_arcs+1)
-        for ii in range(len(ti)-1):
+        for ii in range(len(ti) - 1):
             tspan_list.append((t0, ti[ii+1]))
             if ya is None:
                 ya = np.array([sol(t0)[0]])
@@ -270,148 +340,93 @@ class Shooting(BaseAlgorithm):
 
         num_arcs = self.num_arcs
 
+        r_cur = None
+
         if solinit.dynamical_parameters is None:
             nParams = 0
         else:
             nParams = solinit.dynamical_parameters.size
 
-        # Initial state of STM is an identity matrix with an additional column of zeros per parameter
+        # Initial state of STM is an identity matrix with an additional column of zeros per dynamical parameter
         stm0 = np.hstack((np.eye(nOdes), np.zeros((nOdes,nParams)))).reshape(nOdes*(nOdes+nParams))
         n_iter = 1  # Initialize iteration counter
         converged = False  # Convergence flag
 
-        # Ref: Solving Nonlinear Equations with Newton's Method By C. T. Kelley # TODO: Reference this in the docstring
-        # Global Convergence and Armijo's Rule, pg. 11
-        alpha = 1
-        beta = 1
-        r0 = None
-        prop = Propagator(**self.ivp_args)
-        y0stm = np.zeros((len(stm0)+nOdes))
-        yb = np.zeros_like(ya)
-        try:
-            while True:
-                phi_list = []
-                phi_full_list = []
-                t_list = []
-                y_list = []
-                q_list = []
-                if self.pool is None:
-                    for arc_idx, tspan in enumerate(tspan_list):
-                        y0stm[:nOdes] = ya[arc_idx, :]
-                        y0stm[nOdes:] = stm0[:]
-                        sol_ivp = prop(self.stm_ode_func, self.quadrature_function, tspan, y0stm, q0g, paramGuess, sol.aux, 0) # TODO: arc_idx is hardcoded as 0 here, this'll change with path constraints. I51
-                        t = sol_ivp.t
-                        yy = sol_ivp.y
-                        qq = sol_ivp.q
-                        t_list.append(t)
-                        y_list.append(yy[:, :nOdes])
-                        if nquads > 0:
-                            q_list.append(qq[:, :nquads])
-                        yb[arc_idx, :] = yy[-1, :nOdes]
-                        phi_full = np.reshape(yy[:, nOdes:], (len(t), nOdes, nOdes+nParams))
-                        phi_full_list.append(np.copy(phi_full))
-                else:
-                    raise NotImplementedError
-                    y0stm = [np.hstack((ya[arc_idx, :],stm0[:])) for arc_idx, tspan in enumerate(tspan_list)]
-                    q0 = []
-                    sol_set = [self.pool.apply_async(prop, args=(self.stm_ode_func, None, tspan, y0s, q0, paramGuess, sol.aux, 0)) for tspan, y0s in zip(tspan_list, y0stm)]
-                    sol_ivp = [traj.get() for traj in sol_set]
-                    t_list = [s.t for s in sol_ivp]
-                    y_list = [s.y for s in sol_ivp]
-                    yb = [s.y[-1] for s in sol_ivp]
-                    keyboard() # TODO: Parallelize multiple shooting. This is as far as I got.
-                    for arc_idx, tspan in enumerate(tspan_list):
-                        y0stm[:nOdes] = ya[arc_idx, :]
-                        y0stm[nOdes:] = stm0[:]
-                        q0 = []
-                        sol_ivp = prop(self.stm_ode_func, None, tspan, y0stm, q0, paramGuess, sol.aux, 0)
-                        t = sol_ivp.t
-                        yy = sol_ivp.y
-                        y_list.append(yy[:, :nOdes])
-                        t_list.append(t)
-                        yb[arc_idx, :] = yy[-1, :nOdes]
-                        phi_full = np.reshape(yy[:, nOdes:], (len(t), nOdes, nOdes+nParams))
-                        phi_full_list.append(np.copy(phi_full))
+        while not converged and n_iter <= self.max_iterations:
+            t_list, y_list, q_list, phi_full_list, ya, yb = self.compute_y_and_stm(tspan_list, ya, q0g, stm0, paramGuess, sol.aux, nOdes)
 
-                # Break cycle if it exceeds the max number of iterations
-                if n_iter > self.max_iterations:
-                    logging.warning("Maximum iterations exceeded!")
-                    break
+            if nquads == 0:
+                res = self.bc_func_ms(t_list[0][0], ya[0], [], t_list[-1][-1], yb[0], [], paramGuess, nondynamical_parameter_guess, sol.aux)
+            else:
+                res = self.bc_func_ms(t_list[0][0], ya[0], q_list[0][0, :], t_list[-1][-1], yb[0], q_list[-1][-1, :], paramGuess, nondynamical_parameter_guess, sol.aux)
 
-                # Determine the error vector
-                if nquads == 0:
-                    res = self.bc_func_ms(t_list[0][0], ya[0], [], t_list[-1][-1], yb[0], [], paramGuess, nondynamical_parameter_guess, sol.aux)
-                else:
-                    res = self.bc_func_ms(t_list[0][0], ya[0], qq[0], t_list[-1][-1], yb[0], qq[-1], paramGuess, nondynamical_parameter_guess, sol.aux)
-
-                # Break cycle if there are any NaNs in our error vector
+            r1 = np.linalg.norm(res)
+            logging.debug('Residual: ' + str(r1))
+            try:
                 if any(np.isnan(res)):
                     print(res)
                     raise RuntimeError("Nan in residual")
 
-                r1 = max(abs(res))
-                logging.debug('Residual: ' + str(r1))
-
                 if r1 > self.max_error:
                     raise RuntimeError('Error exceeded max_error')
+            except RuntimeError as err:
+                logging.warning(err)
+                import traceback
+                traceback.print_exc()
+                break
 
-                # Solution converged if BCs are satisfied to tolerance
-                if r1 <= self.tolerance and n_iter > 1:
-                    logging.info("Converged in "+str(n_iter)+" iterations.")
-                    converged = True
-                    break
+            # Compute Jacobian of boundary conditions
+            nBCs = len(res)
 
-                # Compute Jacobian of boundary conditions
-                nBCs = len(res)
+            J = self._bc_jac_multi(t_list, nBCs, nquads, phi_full_list, y_list, q_list, paramGuess, nondynamical_parameter_guess, sol.aux, self.quadrature_function, self.bc_func_ms)
 
-                J = self._bc_jac_multi(t_list, nBCs, nquads, phi_full_list, y_list, q_list, paramGuess, nondynamical_parameter_guess, sol.aux, self.quadrature_function, self.bc_func_ms)
+            try:
+                raw_step = np.linalg.solve(J, -res)
+            except np.linalg.LinAlgError as err:
+                logging.warning(err)
+                raw_step, *_ = np.linalg.lstsq(J, -res)
 
-                # Compute correction vector
-                if r0 is not None:
-                    # if r1/r0 > 2:
-                    #     logging.error('Residue increased more than 2x in one iteration!')
-                    #     break
-                    # beta = (r0-r1)/(alpha*r0)
-                    beta = 1
-                    if beta < 0:
-                        beta = 1
+            a = 1e-4
+            reduct = 0.5
+            ll = 1.0
 
-                if r1 > 1:
-                    alpha = 1/(2*r1)
-                else:
-                    alpha = 1
+            if r_cur is None:
+                r_cur = r1
+            r_try = float('Inf')
 
-                r0 = r1
-
-                # No damping if error within one order of magnitude of tolerance
-                if r1 < min(10*self.tolerance, 1e-3):
-                    alpha, beta = 1, 1
-
-                try:
-                    dy0 = alpha*beta*np.linalg.solve(J, -res)
-                except:
-                    dy0, *_ = np.linalg.lstsq(J, -res)
-                    dy0 = alpha*beta*dy0
-
-                # Apply corrections to states and parameters (if any)
-                d_ya = np.reshape(dy0[:nOdes * num_arcs], (num_arcs, nOdes), order='C')
+            ya_copy = copy.deepcopy(ya)
+            p_copy = copy.deepcopy(paramGuess)
+            p2_copy = copy.deepcopy(nondynamical_parameter_guess)
+            while (r_try >= (1 - a*ll)*r_cur) and r_try > self.tolerance:
+                step = ll*raw_step
+                d_ya = np.reshape(step[:nOdes * num_arcs], (num_arcs, nOdes), order='C')
+                ya = ya_copy + d_ya
 
                 if nParams > 0:
-                    dp1 = dy0[nOdes * num_arcs:nOdes * num_arcs + paramGuess.size]
-                    dp2 = dy0[nOdes * num_arcs + paramGuess.size:]
-                    paramGuess += dp1
-                    nondynamical_parameter_guess += dp2
-                    ya = ya + d_ya
+                    dp1 = step[nOdes * num_arcs:nOdes * num_arcs + paramGuess.size]
+                    dp2 = step[nOdes * num_arcs + paramGuess.size:]
+                    paramGuess = p_copy + dp1
+                    nondynamical_parameter_guess += p2_copy + dp2
+
+                t_list, y_list, q_list, ya, yb = self.compute_y(tspan_list, ya, q0g, paramGuess, sol.aux)
+                if nquads == 0:
+                    res_try = self.bc_func_ms(t_list[0][0], ya[0], [], t_list[-1][-1], yb[0], [], paramGuess, nondynamical_parameter_guess, sol.aux)
                 else:
-                    ya = ya + d_ya
+                    res_try = self.bc_func_ms(t_list[0][0], ya[0], q_list[0][0, :], t_list[-1][-1], yb[0], q_list[-1][-1, :], paramGuess, nondynamical_parameter_guess, sol.aux)
 
-                n_iter += 1
-                logging.debug('Iteration #' + str(n_iter))
+                r_try = np.linalg.norm(res_try)
+                ll *= reduct
+                if ll <= 0.1:
+                    r1 = r_try
+                    break
 
-        except Exception as e:
-            logging.warning(e)
-            import traceback
-            traceback.print_exc()
+            r_cur = r_try
+            logging.debug('Iteration #' + str(n_iter))
+            # Solution converged if BCs are satisfied to tolerance
+            if r_cur <= self.tolerance and n_iter > 1:
+                logging.info("Converged in " + str(n_iter) + " iterations.")
+                converged = True
+            n_iter += 1
 
         if converged:
             sol.arcs = []
