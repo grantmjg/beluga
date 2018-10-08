@@ -3,6 +3,7 @@ import logging
 import numba
 import numpy as np
 import sympy as sym
+import inspect
 
 from sympy.utilities.lambdify import lambdastr
 
@@ -87,6 +88,11 @@ def make_deriv_func(deriv_list, states, costates, parameters, constants, control
                 eom_vals[ii] = eom_fn[ii](*X, *p, *C, *u)
 
             return eom_vals
+
+    logging.debug(inspect.getsource(deriv_func))
+    logging.debug('eom_vals = ')
+    logging.debug(deriv_list)
+    logging.debug('')
 
     return deriv_func
 
@@ -195,6 +201,10 @@ def make_bc_func(bc_initial, bc_terminal, states, costates, dynamical_parameters
             res_left = bc_func_left(y0, u0, p, ndp, aux)
             res_right = bc_func_right(yf, uf, p, ndp, aux)
             return np.hstack((res_left.flatten(), res_right.flatten()))
+
+    logging.debug(inspect.getsource(bc_func))
+    logging.debug(inspect.getsource(bc_func_left))
+    logging.debug(inspect.getsource(bc_func_right))
 
     return bc_func
 
