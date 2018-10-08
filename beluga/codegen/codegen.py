@@ -89,8 +89,7 @@ def make_deriv_func(deriv_list, states, costates, parameters, constants, control
 
             return eom_vals
 
-    logging.debug(inspect.getsource(deriv_func))
-    logging.debug('eom_vals = ')
+    logging.debug('State and costate equations of motion')
     logging.debug(deriv_list)
     logging.debug('')
 
@@ -202,9 +201,13 @@ def make_bc_func(bc_initial, bc_terminal, states, costates, dynamical_parameters
             res_right = bc_func_right(yf, uf, p, ndp, aux)
             return np.hstack((res_left.flatten(), res_right.flatten()))
 
-    logging.debug(inspect.getsource(bc_func))
-    logging.debug(inspect.getsource(bc_func_left))
-    logging.debug(inspect.getsource(bc_func_right))
+    logging.debug('Initial boundary conditions:')
+    logging.debug(bc_initial)
+    logging.debug('')
+
+    logging.debug('Terminal boundary conditions')
+    logging.debug(bc_terminal)
+    logging.debug('')
 
     return bc_func
 
